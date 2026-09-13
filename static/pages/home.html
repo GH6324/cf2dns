@@ -1,0 +1,149 @@
+<div class="clearfixDns">
+    <div class="SetAggregateOne">
+        <p><span>IPV4</span>
+            <select class="bt-input-text" name="ipv4" type="text">
+                <option value="on">开启</option>
+                <option value="off">关闭</option>
+            </select></p>
+        <p><span>IPV6</span>
+            <select class="bt-input-text" name="ipv6" type="text">
+                <option value="on">开启</option>
+                <option value="off">关闭</option>
+            </select></p>
+        <p><span>NS服务商</span>
+            <select class="bt-input-text" name="dns_server" type="number"
+                    onchange="cf2dns.pages.home.toggle_region(this.value)"></select></p>
+        <!--地区下拉按解析商动态生成，插在这里-->
+        <div id="home_region"></div>
+        <p><span>解析数量</span><input class="bt-input-text" name="affect_num" type="number" value="" /></p>
+        <p><span>TTL</span><input class="bt-input-text" name="ttl" type="number" value="" /></p>
+        <p><span>SecretID</span><input class="bt-input-text" name="secretid" type="text" value="" /></p>
+        <p><span>SecretKEY</span><input class="bt-input-text" name="secretkey" type="text" value="" /></p>
+    </div>
+    <p><button style="margin-left: 288px; margin-top: 15px;" class="btn btn-default btn-sm btn-title"
+               onclick="cf2dns.pages.home.save();">保存</button></p>
+</div>
+<ul class="help-info-text c7 mtb15" id="home_help">
+    <li>IPV6&IPV4：同时开启IPV6&IPV4支持将会请求2次接口消耗双倍积分。</li>
+    <!--各解析商的密钥获取链接动态替换这一条-->
+    <li id="home_secret_help"></li>
+    <li>解析数量：这个是每个线路解析的IP，更移动联通电信三条线路。DNSPOD免费版只支持单线路2个IP，华为阿里可以设置5个</li>
+</ul>
+
+<script>
+cf2dns.pages.home = {
+    init: function () {
+        cf2dns.send_request('get_home_info', 'get', {}, function (res) {
+            if (!cf2dns.is_current('home')) return;
+            var data = res.data || {};
+            var config = data.config || {};
+            var providers = data.dns_providers || [];
+            var lines = data.lines || [];
+            //写回框架缓存，域名管理页取默认线路时直接复用
+            cf2dns.home_cache = { config: config, providers: providers, lines: lines };
+
+            //NS服务商下拉由 config/dns_provider.json 生成
+            var dnsOptions = '';
+            providers.forEach(function (item) {
+                dnsOptions += '<option value="' + cf2dns.esc(item.id) + '"' + (String(config.dns_server) === String(item.id) ? ' selected' : '') + '>' + cf2dns.esc(item.name) + '</option>';
+            });
+            $("select[name='dns_server']").html(dnsOptions);
+
+            //地区下拉块：仅该解析商声明了 region_field 时生成
+            var regionHtml = '';
+            providers.forEach(function (item) {
+                if (!item.region_field) return;
+                var saved = config[item.region_field];
+                var regionOptions = '';
+                (item.regions || []).forEach(function (region) {
+                    regionOptions += '<option value="' + cf2dns.esc(region.value) + '"' + (String(saved) === String(region.value) ? ' selected' : '') + '>' + cf2dns.esc(region.label) + '</option>';
+                });
+                //已保存的地区不在清单中时补一条，避免下拉显示为空
+                var matched = (item.regions || []).some(function (region) {
+                    return String(region.value) === String(saved);
+                });
+                if (saved && !matched) {
+                    regionOptions = '<option value="' + cf2dns.esc(saved) + '" selected>' + cf2dns.esc(saved) + '</option>' + regionOptions;
+                }
+                regionHtml += '<p class="additional-section" data-provider-id="' + cf2dns.esc(item.id) + '" style="display:none;">\
+                        <span>' + cf2dns.esc(item.region_label || '地区') + '</span>\
+                        <select class="bt-input-text" name="' + cf2dns.esc(item.region_field) + '" type="text">' + regionOptions + '</select></p>';
+            });
+            $('#home_region').html(regionHtml);
+
+            //密钥获取帮助链接由解析商声明生成，按解析商显隐，与地区块一致
+            var secretHelp = '';
+            providers.forEach(function (item) {
+                var help = item.secret_help;
+                if (!help || !help.url) return;
+                secretHelp += '<li class="secret-help-item" data-provider-id="' + cf2dns.esc(item.id) + '" style="display:none;">' + cf2dns.esc(help.prefix) + ' ' + cf2dns.esc(help.url) + (help.suffix ? ' ' + cf2dns.esc(help.suffix) : '') + '</li>';
+            });
+            $('#home_secret_help').replaceWith(secretHelp);
+
+            //填入已保存的值
+            $("select[name='ipv4']").val(config.ipv4 || 'on');
+            $("select[name='ipv6']").val(config.ipv6 || 'on');
+            $("input[name='affect_num']").val(config.affect_num);
+            $("input[name='ttl']").val(config.ttl);
+            $("input[name='secretid']").val(config.secretid);
+            $("input[name='secretkey']").val(config.secretkey);
+
+            //按当前保存的解析商显示对应地区块
+            cf2dns.pages.home.toggle_region(String(config.dns_server));
+        }, 100000, function () {
+            if (!cf2dns.is_current('home')) return;
+            $(".plugin_body").html('<div class="c7 mtb15">解析配置读取失败，请稍后重试。</div>');
+        });
+    },
+
+    //按选中解析商显隐地区块与密钥帮助。注册时即存在，不存在先调用后定义的问题
+    toggle_region: function (value) {
+        $('.additional-section').hide();
+        $(".additional-section[data-provider-id='" + value + "']").show();
+        $('.secret-help-item').hide();
+        $(".secret-help-item[data-provider-id='" + value + "']").show();
+    },
+
+    save: function () {
+        layer.confirm('是否确认保存配置？', {
+            btn: ['确认', '取消']
+        }, function (index) {
+            layer.close(index);
+            var dns_server = $("select[name='dns_server']").val();
+            var payload = {
+                'ipv4': $("select[name='ipv4']").val(),
+                'ipv6': $("select[name='ipv6']").val(),
+                'dns_server': dns_server,
+                'affect_num': $("input[name='affect_num']").val(),
+                'ttl': $("input[name='ttl']").val(),
+                'secretid': $("input[name='secretid']").val(),
+                'secretkey': $("input[name='secretkey']").val(),
+                'error': true
+            };
+            //只提交当前选中解析商的地区字段，未选中的不提交，避免清空已保存的地区配置
+            var cache = cf2dns.home_cache || {};
+            (cache.providers || []).forEach(function (item) {
+                if (!item.region_field) return;
+                if (String(item.id) !== String(dns_server)) return;
+                var regionValue = $("select[name='" + item.region_field + "']").val();
+                if (regionValue) payload[item.region_field] = regionValue;
+            });
+            cf2dns.loading = layer.msg('保存中', { icon: 16, time: 100000 });
+            cf2dns.send_request('set_home_info', 'post', payload, function (res) {
+                layer.close(cf2dns.loading);
+                if (res.code == 200) {
+                    layer.msg('保存成功!', { icon: 1, time: 1500 });
+                    //缓存已过期，重新拉取
+                    cf2dns.home_cache = null;
+                    cf2dns.show_page('home');
+                } else {
+                    layer.msg(res.msg, { icon: 2, time: 3000 });
+                }
+            }, 100000, function () {
+                layer.close(cf2dns.loading);
+                layer.msg('保存失败，请稍后重试', { icon: 2, time: 3000 });
+            });
+        });
+    }
+};
+</script>

@@ -1,0 +1,39 @@
+# 用户数据：绝不能进构建上下文。
+# 本地工作副本里的这两个文件带着真实密钥与域名，一旦被 COPY 进去就永久留在镜像层里，
+# 推到任何 registry 都等于公开。Dockerfile 用的是逐个 COPY，这里是第二道防线。
+# 与 CLAUDE.md「发布包不得包含 config/config.json 与 config/domains.json」同源。
+config/config.json
+config/domains.json
+config/old_root_backup/
+
+# 运行时产物
+cf2dns.log
+cf2dns.log.*
+__pycache__/
+*.pyc
+.heartbeat
+
+# 面板专属，容器里用不到
+index.html
+static/
+cf2dns_main.py
+install.sh
+info.json
+
+# 打包件、文档、图片、开发工具目录
+cf2dns.zip
+*.pdf
+*.jpg
+*.png
+README.md
+CLAUDE.md
+tests/
+.git/
+.github/
+.claude/
+.playwright-mcp/
+# wiki 是仓库里的独立 git 克隆（含 image/ 截图），与镜像无关
+cf2dns.wiki/
+docker-compose.yml
+Dockerfile
+.dockerignore

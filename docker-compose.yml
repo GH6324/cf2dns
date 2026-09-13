@@ -1,0 +1,49 @@
+# cf2dns Docker 部署
+#
+#   docker compose up -d      # 启动（后台常驻，按 RUN_INTERVAL 反复执行）
+#   docker compose logs -f    # 看运行日志
+#   docker compose down       # 停止
+#
+# 配置有两种喂法，任选其一：
+#   方式 A（默认，已启用）：挂载 ./config 目录，直接编辑 config.json / domains.json。
+#                          目录结构与宝塔插件版一致，老备份可以直接拷进来用。
+#                          首次启动会自动生成模板文件。
+#   方式 B：用 CONFIG / DOMAINS 环境变量传 JSON，不挂任何目录。
+#          适合 Portainer、k8s secret 这类不方便管文件的场景，日志会自动脱敏。
+#          启用时把下面 environment 里的 CONFIG/DOMAINS 取消注释，并注释掉 volumes 整段。
+
+services:
+  cf2dns:
+    build: .
+    # image: ghcr.io/gacjie/cf2dns:latest   # 暂不提供预构建镜像，请自行 build
+    container_name: cf2dns
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Shanghai
+      # 两轮之间等待的秒数。优选接口 15 分钟才更新一批 IP，设更短只是白耗积分。
+      # 设 0 表示跑一次就退出（配合 docker compose run --rm 手动执行一次）
+      RUN_INTERVAL: 900
+
+      # 日志脱敏开关。默认（方式 A）日志留在本机，域名和密钥明文可见、排错更方便；
+      # 打开后强制走环境变量形态，域名与密钥在日志里显示成 ***，
+      # 适合日志会被别人看到的场合。方式 B 无需设置，自动就是脱敏的
+      # CF2DNS_ARGS: --env
+
+      # 把日志同时落到挂载目录里持久化（不设则只写容器内 /app/cf2dns.log，重建即丢；
+      # stdout 一路都有，docker logs 始终看得到）
+      # CF2DNS_LOG_FILE: /app/config/cf2dns.log
+
+      # ---- 方式 B：环境变量喂配置（启用时请注释掉下面的 volumes 整段）----
+      # CONFIG: '{"ipv4":"on","ipv6":"off","dns_server":1,"affect_num":2,"ttl":600,"secretid":"改成你的","secretkey":"改成你的","key":"o1zrmHAF","data_server":1}'
+      # DOMAINS: '{"example.com":{"@":["CM","CU","CT"],"www":["CM","CU","CT"]}}'
+      # PROVIDER 只在用自定义优选源时才需要；不设会自动读镜像里的 data_provider.json
+      # PROVIDER: '[{"id":1,"name":"自定义源","get_ip_url":"https://example.com/api"}]'
+
+    # ---- 方式 A：挂载配置目录（默认）----
+    volumes:
+      - ./config:/app/config
+
+    # 默认以 root 跑：宿主机的 config 目录常常属 root（docker 代建的、或本来就用 root 操作），
+    # 换成别的 uid 第一次启动就写不进配置模板。想收紧权限就打开下面这行，
+    # 并先把宿主机的 config 目录 chown 成同一个 uid
+    # user: "1000:1000"

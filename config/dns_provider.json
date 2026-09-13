@@ -1,0 +1,87 @@
+[
+    {
+        "id": 1,
+        "name": "DNSPod",
+        "secret_help": {
+            "prefix": "腾讯云密钥获取",
+            "url": "https://console.cloud.tencent.com/cam/capi",
+            "suffix": ""
+        },
+        "region_field": "",
+        "region_label": "",
+        "regions": []
+    },
+    {
+        "id": 2,
+        "name": "AliDNS",
+        "secret_help": {
+            "prefix": "阿里云密钥获取",
+            "url": "https://help.aliyun.com/document_detail/53045.html?spm=a2c4g.11186623.2.11.2c6a2fbdh13O53",
+            "suffix": "注意需要添加DNS控制权限 AliyunDNSFullAccess"
+        },
+        "region_field": "region_ali",
+        "region_label": "AliDNS地区",
+        "regions": [
+            {"value": "cn-beijing",    "label": "华北2-北京(cn-beijing)[国内账号]"},
+            {"value": "cn-chengdu",    "label": "西南1-成都(cn-chengdu)[国内账号]"},
+            {"value": "cn-guangzhou",  "label": "华南3-广州(cn-guangzhou)[国内账号]"},
+            {"value": "cn-hangzhou",   "label": "华东1-杭州(cn-hangzhou)[国内账号]"},
+            {"value": "cn-heyuan",     "label": "华南2-河源(cn-heyuan)[国内账号]"},
+            {"value": "cn-huhehaote",  "label": "华北5-呼和浩特(cn-huhehaote)[国内账号]"},
+            {"value": "cn-qingdao",    "label": "华北1-青岛(cn-qingdao)[国内账号]"},
+            {"value": "cn-shanghai",   "label": "华东2-上海(cn-shanghai)[国内账号]"},
+            {"value": "cn-shenzhen",   "label": "华南1-深圳(cn-shenzhen)[国内账号]"},
+            {"value": "cn-wulanchabu", "label": "华北6-乌兰察布(cn-wulanchabu)[国内账号]"},
+            {"value": "cn-zhangjiakou", "label": "华北3-张家口(cn-zhangjiakou)[国内账号]"},
+            {"value": "cn-hongkong",   "label": "中国-香港(cn-hongkong)[国际账号]"},
+            {"value": "us-west-1",     "label": "美国-硅谷(us-west-1)[国际账号]"},
+            {"value": "us-east-1",     "label": "美国-弗吉尼亚(us-east-1)[国际账号]"},
+            {"value": "ap-northeast-1", "label": "日本-东京(ap-northeast-1)[国际账号]"},
+            {"value": "ap-southeast-1", "label": "新加坡(ap-southeast-1)[国际账号]"},
+            {"value": "ap-southeast-3", "label": "马来西亚-吉隆坡(ap-southeast-3)[国际账号]"},
+            {"value": "ap-southeast-5", "label": "印度尼西亚-雅加达(ap-southeast-5)[国际账号]"},
+            {"value": "eu-central-1",  "label": "德国-法兰克福(eu-central-1)[国际账号]"},
+            {"value": "eu-west-1",     "label": "英国-伦敦(eu-west-1)[国际账号]"},
+            {"value": "me-east-1",     "label": "阿联酋-迪拜(me-east-1)[国际账号]"}
+        ]
+    },
+    {
+        "id": 3,
+        "name": "HuaWeiDNS",
+        "secret_help": {
+            "prefix": "华为云后台获取",
+            "url": "https://support.huaweicloud.com/devg-apisign/api-sign-provide-aksk.html",
+            "suffix": ""
+        },
+        "region_field": "region_hw",
+        "region_label": "HuaWei地区",
+        "regions": [
+            {"value": "cn-north-4",    "label": "华北-北京四(cn-north-4)[国内账号]"},
+            {"value": "cn-north-1",    "label": "华北-北京一(cn-north-1)[国内账号]"},
+            {"value": "cn-east-2",     "label": "华东-上海二(cn-east-2)[国内账号]"},
+            {"value": "cn-east-3",     "label": "华东-上海一(cn-east-3)[国内账号]"},
+            {"value": "cn-south-1",    "label": "华南-广州(cn-south-1)[国内账号]"},
+            {"value": "cn-southwest-2", "label": "西南-贵阳一(cn-southwest-2)[国内账号]"},
+            {"value": "ap-southeast-1", "label": "中国-香港(ap-southeast-1)[国际账号]"},
+            {"value": "af-south-1",    "label": "非洲-约翰内斯堡(af-south-1)[国际账号]"},
+            {"value": "eu-west-101",   "label": "欧洲-都柏林(eu-west-101)[国际账号]"},
+            {"value": "tr-west-1",     "label": "土耳其-伊斯坦布尔(tr-west-1)[国际账号]"},
+            {"value": "ap-southeast-2", "label": "亚太-曼谷(ap-southeast-2)[国际账号]"},
+            {"value": "ap-southeast-3", "label": "亚太-新加坡(ap-southeast-3)[国际账号]"},
+            {"value": "ae-ad-1",       "label": "中东-阿布扎比-OP5(ae-ad-1)[国际账号]"},
+            {"value": "me-east-1",     "label": "中东-利雅得(me-east-1)[国际账号]"}
+        ]
+    },
+    {
+        "id": 4,
+        "name": "QingCloud",
+        "secret_help": {
+            "prefix": "青云API密钥获取",
+            "url": "https://console.qingcloud.com/access_keys/",
+            "suffix": "控制台右上角用户中心 > API密钥 > 创建"
+        },
+        "region_field": "",
+        "region_label": "",
+        "regions": []
+    }
+]

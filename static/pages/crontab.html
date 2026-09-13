@@ -1,0 +1,28 @@
+<ul class="help-info-text c7 mtb15">
+    <li>本插件不会自行运行，需要在宝塔面板的「计划任务」中添加一个 Shell 脚本任务来定时执行。</li>
+    <li>任务类型选择「Shell脚本」，执行周期建议 <b>不低于 15 分钟</b>，过于频繁会快速消耗优选接口积分。</li>
+    <li>脚本内容填写：<br />
+        <b><span id="crontab_script_path">加载中...</span></b>
+    </li>
+    <li>脚本启动后会先随机等待一段时间再执行，避免所有用户同时请求优选接口，因此任务不会在触发的瞬间完成。</li>
+    <li>执行结果与错误信息记录在插件目录下的 <b>cf2dns.log</b>，解析异常时请先查看该日志。</li>
+    <li>添加计划任务前，请先在「解析配置」与「数据服务」中填好密钥与KEY，并在「域名管理」中至少添加一个域名。</li>
+</ul>
+
+<script>
+cf2dns.pages.crontab = {
+    init: function () {
+        cf2dns.plugin_info(function (data) {
+            if (!cf2dns.is_current('crontab')) return;
+            var info = data.info || {};
+            //插件安装路径取自 info.json 的 checks 字段，避免在前端写死
+            var base = info.checks || '/www/server/panel/plugin/cf2dns';
+            $('#crontab_script_path').text('btpython ' + base + '/cf2dns.py');
+        }, function () {
+            if (!cf2dns.is_current('crontab')) return;
+            //拿不到 info.json 时给出默认路径，仍然可用
+            $('#crontab_script_path').text('btpython /www/server/panel/plugin/cf2dns/cf2dns.py');
+        });
+    }
+};
+</script>

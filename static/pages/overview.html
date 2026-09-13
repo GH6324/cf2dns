@@ -1,0 +1,65 @@
+<table class="table table-hover waftable">
+    <tbody id="ov_table_body">
+        <tr>
+            <td>插件版本:</td>
+            <td><i class="sui-icon icon-pc-loading" id="ov_version"></i></td>
+        </tr>
+        <tr>
+            <td>插件说明:</td>
+            <td id="ov_ps"></td>
+        </tr>
+        <tr>
+            <td>作者:</td>
+            <td id="ov_author"></td>
+        </tr>
+        <tr>
+            <td>本插件 GITHUB仓库:</td>
+            <td id="ov_home"></td>
+        </tr>
+        <tr>
+            <td>鸣谢:</td>
+            <td id="ov_thanks"></td>
+        </tr>
+    </tbody>
+</table>
+
+<script>
+cf2dns.pages.overview = {
+    init: function () {
+        cf2dns.plugin_info(function (data) {
+            if (!cf2dns.is_current('overview')) return;
+            var info = data.info || {};
+            var about = data.about || {};
+
+            var versionText = cf2dns.esc(info.name || info.title || 'cf2dns');
+            if (info.versions) versionText += ' V' + cf2dns.esc(info.versions);
+            if (info.date) versionText += ' ' + cf2dns.esc(info.date);
+            $('#ov_version').html(versionText);
+
+            $('#ov_ps').html(cf2dns.esc(info.ps));
+            $('#ov_author').html('<a href="' + cf2dns.esc(info.author_url || info.home || '#') + '" target="_blank">' + cf2dns.esc(info.author) + '</a>');
+            $('#ov_home').html('<a href="' + cf2dns.esc(info.home || '#') + '" target="_blank">' + cf2dns.esc(info.home) + '</a>');
+
+            //鸣谢，来自 config/about.json
+            var thanksHtml = '';
+            (about.thanks || []).forEach(function (item, index) {
+                if (index > 0) thanksHtml += ' & ';
+                thanksHtml += '<a href="' + cf2dns.esc(item.url) + '" target="_blank">' + cf2dns.esc(item.name) + '</a>';
+            });
+            $('#ov_thanks').html(thanksHtml);
+
+            //赞助链接追加到表格末尾。选择器限定到本页的 tbody id，
+            //避免回调迟到时把内容塞进用户已经切过去的别的页面表格里
+            var sponsorHtml = '';
+            (about.sponsors || []).forEach(function (item) {
+                sponsorHtml += '<tr><td>' + cf2dns.esc(item.label) + '</td>\
+                    <td><a href="' + cf2dns.esc(item.url) + '" target="_blank">' + cf2dns.esc(item.text) + '</a></td></tr>';
+            });
+            $('#ov_table_body').append(sponsorHtml);
+        }, function () {
+            if (!cf2dns.is_current('overview')) return;
+            $(".plugin_body").html('<div class="c7 mtb15">插件信息读取失败，请检查 info.json 与 config/about.json 是否存在且格式正确。</div>');
+        });
+    }
+};
+</script>

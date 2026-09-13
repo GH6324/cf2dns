@@ -24,15 +24,15 @@
 </style>
 <div class="bt-form">
     <div class="bt-w-main">
-        <!--菜单部分-->
+        <!--菜单部分，data-page 与 static/pages/<id>.html 同名-->
         <div class="bt-w-menu">
-            <p class="bgw" onclick="cf2dns.deatil()">概览</p>
-            <p onclick="cf2dns.get_home_info()">解析配置</p>
-            <p onclick="cf2dns.get_domian_list()">域名管理</p>
-            <p onclick="cf2dns.get_data_server()">数据服务</p>
-            <p onclick="cf2dns.get_scheduled_task()">计划任务</p>
+            <p data-page="overview"   onclick="cf2dns.show_page('overview')">概览</p>
+            <p data-page="home"       onclick="cf2dns.show_page('home')">解析配置</p>
+            <p data-page="domain"     onclick="cf2dns.show_page('domain')">域名管理</p>
+            <p data-page="dataserver" onclick="cf2dns.show_page('dataserver')">数据服务</p>
+            <p data-page="crontab"    onclick="cf2dns.show_page('crontab')">计划任务</p>
         </div>
-        <!--内容部分-->
+        <!--内容部分，子页面注入到这里-->
         <div class="bt-w-con pd15">
             <div class="plugin_body"></div>
         </div>
@@ -43,363 +43,160 @@
 
     //定义窗口尺寸
     $('.layui-layer-page').css({ 'width': '900px' });
-    //左测菜单切换效果
-    $(".bt-w-menu p").click(function () {
-        $(this).addClass('bgw').siblings().removeClass('bgw')
-    });
+
+    //=====================================================================
+    //  框架入口：只负责样式、菜单、路由、请求与跨页共享数据
+    //  各页面的界面与逻辑在 static/pages/<id>.html 里，由 show_page 动态加载
+    //=====================================================================
     var cf2dns = {
-        deatil: function () {
-			var tpl="";
-                tpl += "<table class=\"table table-hover waftable\">";
-                tpl += "	<tbody>";
-                tpl += "    <tr>";
-                tpl += "      <td>插件版本:<\/td>";
-                tpl += "      <td><i class=\"sui-icon icon-pc-loading\">Cf2dns V1.12 250711<\/i><\/td>";
-                tpl += "    <\/tr>";
-                tpl += "    <tr>";
-                tpl += "      <td>作者:<\/td>";
-                tpl += "      <td><a href=\"https://github.com/gacjie/\" target=\"_blank\">gacjie<\/a><\/td>";
-                tpl += "    <\/tr>";
-                tpl += "    <tr>";
-                tpl += "      <td>本插件 GITHUB仓库:<\/td>";
-                tpl += "      <td><a href=\"https://github.com/gacjie/cf2dns/\" target=\"_blank\">https://github.com/gacjie/cf2dns/<\/a><\/td>";
-                tpl += "    <\/tr>";
-                tpl += "    <tr>";
-                tpl += "      <td>鸣谢:<\/td>";
-                tpl += "      <td><a href=\"https://github.com/ddgth/cf2dns/\" target=\"_blank\">冬冬<\/a> & <a href=\"https://shop.huaqi.pro/\" target=\"_blank\">花旗<\/a> & <a href=\"https://www.hosuyun.com/\" target=\"_blank\">弘速云<\/a><\/td>";
-                tpl += "    <\/tr>";
-                tpl += "    <tr>";
-                tpl += "      <td>【弘速云】香港、美国高性能优质线路服务器，新用户首购五折特惠。<\/td>";
-                tpl += "      <td><a href=\"https://www.hosuyun.com\" target=\"_blank\">https://www.hosuyun.com<\/a><\/td>";
-                tpl += "    <\/tr>";
-                tpl += "    <tr>";
-                tpl += "      <td>【宝塔】宝塔产品特惠，linux专业版1年仅需￥699。<\/td>";
-                tpl += "      <td><a href=\"https://www.bt.cn/p/2PcEKn\" target=\"_blank\">https://www.bt.cn/p/2PcEKn<\/a><\/td>";
-                tpl += "    <\/tr>";
-                tpl += "    <tr>";
-                tpl += "      <td>【腾讯云】云产品1折特惠，2核2G4M仅需108元/年<\/td>";
-                tpl += "      <td><a href=\"https://curl.qcloud.com/zASK1SLm\" target=\"_blank\">https://curl.qcloud.com/zASK1SLm<\/a><\/td>";
-                tpl += "    <\/tr>";
-                tpl += "    <tr>";
-                tpl += "      <td>【阿里云】云产品爆款特惠，2核2G3M仅需82元/年<\/td>";
-                tpl += "      <td><a href=\"https://www.aliyun.com/minisite/goods?userCode=zqpad1gj\" target=\"_blank\">https://www.aliyun.com/minisite/goods?userCode=zqpad1gj<\/a><\/td>";
-                tpl += "    <\/tr>";
-                tpl += "<\/table>";
-            $(".plugin_body").html(tpl);
+        //子页面注册表，pages/<id>.html 被注入时把自己挂到 cf2dns.pages.<id>
+        pages: {},
+        //子页面 HTML 缓存，面板页面刷新即失效
+        page_cache: {},
+        current_page: '',
+        //layer 加载提示的句柄，各页面保存/删除时共用
+        loading: null,
+
+        //----------------------------- 工具 -----------------------------
+        //HTML转义，JSON中的数据拼接进模板前统一处理，避免引号或标签破坏页面结构
+        esc: function (value) {
+            if (value === undefined || value === null) return '';
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
         },
-        get_home_info: function() {
+        //用于拼接进 onclick 的域名与主机名，配合 decodeURIComponent 还原
+        enattr: function (value) {
+            if (value === undefined || value === null) return '';
+            return encodeURIComponent(String(value)).replace(/'/g, '%27');
+        },
+        //接口返回未登录时的统一提示，由 send_request 集中处理，页面不必各自判断
+        render_denied: function (res) {
+            $(".plugin_body").html('<div class="c7 mtb15">' + cf2dns.esc((res && res.msg) || '未登录') + '，请重新登录面板后刷新本页。</div>');
+        },
+        //异步回调回来时用户可能已经切走了，此时不能再动 .plugin_body，否则会把当前页面冲掉
+        is_current: function (id) {
+            return cf2dns.current_page === id;
+        },
 
-            cf2dns.send_request('get_home_info', 'get', {}, function(res) {
-                var tpl = '<div class="clearfixDns">\
-                        <div class="SetAggregateOne">\
-                            <p><span>IPV4</span><select class="bt-input-text" name="ipv4" type="text">\
-                                <option value="on"' + (res.data.ipv4 === 'on' ? ' selected' : '') + '>开启</option>\
-                                <option value="off"' + (res.data.ipv4 === 'off' ? ' selected' : '') + '>关闭</option>\
-                            </select></p>\
-                            <p><span>IPV6</span><select class="bt-input-text" name="ipv6" type="text">\
-                                <option value="on"' + (res.data.ipv6 === 'on' ? ' selected' : '') + '>开启</option>\
-                                <option value="off"' + (res.data.ipv6 === 'off' ? ' selected' : '') + '>关闭</option>\
-                            </select></p>\
-                            <p><span>NS服务商</span><select class="bt-input-text" name="dns_server" type="number"\
-                                onchange="cf2dns.toggleAdditionalSection(this.value)">\
-                                <option value="1"' + (res.data.dns_server === 1 ? ' selected' : '') + '>DNSPod</option>\
-                                <option value="2"' + (res.data.dns_server === 2 ? ' selected' : '') + '>AliDNS</option>\
-                                <option value="3"' + (res.data.dns_server === 3 ? ' selected' : '') + '>HuaWeiDNS</option>\
-                            </select></p>\
-                            <p class="additional-section-hw">\
-                            <span>HuaWei地区</span><select class="bt-input-text" name="region_hw" type="text">\
-                                <option value="cn-north-4"' + (res.data.region_hw === 'cn-north-4' ? ' selected' : '') + '>华北-北京四(cn-north-4)[国内账号]</option>\
-								<option value="cn-north-1"' + (res.data.region_hw === 'cn-north-1' ? ' selected' : '') + '>华北-北京一(cn-north-1)[国内账号]</option>\
-								<option value="cn-east-2"' + (res.data.region_hw === 'cn-east-2' ? ' selected' : '') + '>华东-上海二(cn-east-2)[国内账号]</option>\
-								<option value="cn-east-3"' + (res.data.region_hw === 'cn-east-3' ? ' selected' : '') + '>华东-上海一(cn-east-3)[国内账号]</option>\
-								<option value="cn-south-1"' + (res.data.region_hw === 'cn-south-1' ? ' selected' : '') + '>华南-广州(cn-south-1)[国内账号]</option>\
-								<option value="cn-southwest-2"' + (res.data.region_hw === 'cn-southwest-2' ? ' selected' : '') + '>西南-贵阳一(cn-southwest-2)[国内账号]</option>\
-								<option value="ap-southeast-1"' + (res.data.region_hw === 'ap-southeast-1' ? ' selected' : '') + '>中国-香港(ap-southeast-1)[国际账号]</option>\
-								<option value="af-south-1"' + (res.data.region_hw === 'af-south-1' ? ' selected' : '') + '>非洲-约翰内斯堡(af-south-1)[国际账号]</option>\
-								<option value="eu-west-101"' + (res.data.region_hw === 'eu-west-101' ? ' selected' : '') + '>欧洲-都柏林(eu-west-101)[国际账号]</option>\
-								<option value="tr-west-1"' + (res.data.region_hw === 'tr-west-1' ? ' selected' : '') + '>土耳其-伊斯坦布尔(tr-west-1)[国际账号]</option>\
-								<option value="ap-southeast-2"' + (res.data.region_hw === 'ap-southeast-2' ? ' selected' : '') + '>亚太-曼谷(ap-southeast-2)[国际账号]</option>\
-								<option value="ap-southeast-3"' + (res.data.region_hw === 'ap-southeast-3' ? ' selected' : '') + '>亚太-新加坡(ap-southeast-3)[国际账号]</option>\
-								<option value="ae-ad-1"' + (res.data.region_hw === 'ae-ad-1' ? ' selected' : '') + '>中东-阿布扎比-OP5(ae-ad-1)[国际账号]</option>\
-								<option value="me-east-1"' + (res.data.region_hw === 'me-east-1' ? ' selected' : '') + '>中东-利雅得(me-east-1)[国际账号]</option>\
-                            </select></p>\
-                            <p class="additional-section-ali">\
-                            <span>AliDNS地区</span><select class="bt-input-text" name="region_ali" type="text">\
-                                <option value="cn-beijing"' + (res.data.region_ali === 'cn-beijing' ? ' selected' : '') + '>华北2-北京(cn-beijing)[国内账号]</option>\
-								<option value="cn-chengdu"' + (res.data.region_ali === 'cn-chengdu' ? ' selected' : '') + '>西南1-成都(cn-chengdu)[国内账号]</option>\
-								<option value="cn-guangzhou"' + (res.data.region_ali === 'cn-guangzhou' ? ' selected' : '') + '>华南3-广州(cn-guangzhou)[国内账号]</option>\
-								<option value="cn-hangzhou"' + (res.data.region_ali === 'cn-hangzhou' ? ' selected' : '') + '>华东1-杭州(cn-hangzhou)[国内账号]</option>\
-								<option value="cn-heyuan"' + (res.data.region_ali === 'cn-heyuan' ? ' selected' : '') + '>华南2-河源(cn-heyuan)[国内账号]</option>\
-								<option value="cn-huhehaote"' + (res.data.region_ali === 'cn-huhehaote' ? ' selected' : '') + '>华北5-呼和浩特(cn-huhehaote)[国内账号]</option>\
-								<option value="cn-qingdao"' + (res.data.region_ali === 'cn-qingdao' ? ' selected' : '') + '>华北1-青岛(cn-qingdao)[国内账号]</option>\
-								<option value="cn-shanghai"' + (res.data.region_ali === 'cn-shanghai' ? ' selected' : '') + '>华东2-上海(cn-shanghai)[国内账号]</option>\
-								<option value="cn-shenzhen"' + (res.data.region_ali === 'cn-shenzhen' ? ' selected' : '') + '>华南1-深圳(cn-shenzhen)[国内账号]</option>\
-								<option value="cn-wulanchabu"' + (res.data.region_ali === 'cn-wulanchabu' ? ' selected' : '') + '>华北6-乌兰察布(cn-wulanchabu)[国内账号]</option>\
-								<option value="cn-zhangjiakou"' + (res.data.region_ali === 'cn-zhangjiakou' ? ' selected' : '') + '>华北3-张家口(cn-zhangjiakou)[国内账号]</option>\
-								<option value="cn-hongkong"' + (res.data.region_ali === 'cn-hongkong' ? ' selected' : '') + '>中国-香港(cn-hongkong)[国际账号]</option>\
-								<option value="us-west-1"' + (res.data.region_ali === 'us-west-1' ? ' selected' : '') + '>美国-硅谷(us-west-1)[国际账号]</option>\
-								<option value="us-east-1"' + (res.data.region_ali === 'us-east-1' ? ' selected' : '') + '>美国-弗吉尼亚(us-east-1)[国际账号]</option>\
-								<option value="ap-northeast-1"' + (res.data.region_ali === 'ap-northeast-1' ? ' selected' : '') + '>日本-东京(ap-northeast-1)[国际账号]</option>\
-								<option value="ap-southeast-1"' + (res.data.region_ali === 'ap-southeast-1' ? ' selected' : '') + '>新加坡(ap-southeast-1)[国际账号]</option>\
-								<option value="ap-southeast-3"' + (res.data.region_ali === 'ap-southeast-3' ? ' selected' : '') + '>马来西亚-吉隆坡(ap-southeast-3)[国际账号]</option>\
-								<option value="ap-southeast-5"' + (res.data.region_ali === 'ap-southeast-5' ? ' selected' : '') + '>印度尼西亚-雅加达(ap-southeast-5)[国际账号]</option>\
-								<option value="eu-central-1"' + (res.data.region_ali === 'eu-central-1' ? ' selected' : '') + '>德国-法兰克福(eu-central-1)[国际账号]</option>\
-								<option value="eu-west-1"' + (res.data.region_ali === 'eu-west-1' ? ' selected' : '') + '>英国-伦敦(eu-west-1)[国际账号]</option>\
-								<option value="me-east-1"' + (res.data.region_ali === 'me-east-1' ? ' selected' : '') + '>阿联酋-迪拜(me-east-1)[国际账号]</option>\
-                            </select></p>\
-                            <p><span>解析数量</span><input class="bt-input-text" name="affect_num" type="number" value="' + res.data.affect_num + '" /></p>\
-                            <p><span>TTL</span><input class="bt-input-text" name="ttl" type="number" value="' + res.data.ttl + '" /></p>\
-                            <p><span>SecretID</span><input class="bt-input-text" name="secretid" type="text" value="' + res.data.secretid + '" /></p>\
-                            <p><span>SecretKEY</span><input class="bt-input-text" name="secretkey" type="text" value="' + res.data.secretkey + '" /></p>\
-                        </div>\
-                        <p><button style="margin-left: 288px; margin-top: 15px;" class="btn btn-default btn-sm btn-title" onclick="cf2dns.set_home_info();">保存</button></p>\
-                    </div>\
-                    <ul class="help-info-text c7 mtb15">\
-                        <li>IPV6&IPV4：同时开启IPV6&IPV4支持将会请求2次接口消耗双倍积分。</li>\
-                        <li>腾讯云密钥获取 https://console.cloud.tencent.com/cam/capi</li>\
-                        <li>阿里云密钥获取 https://help.aliyun.com/document_detail/53045.html?spm=a2c4g.11186623.2.11.2c6a2fbdh13O53  注意需要添加DNS控制权限 AliyunDNSFullAccess</li>\
-                        <li>华为云后台获取 https://support.huaweicloud.com/devg-apisign/api-sign-provide-aksk.html</li>\
-                        <li>解析数量：这个是每个线路解析的IP，更移动联通电信三条线路。DNSPOD免费版只支持单线路2个IP，华为阿里可以设置5个</li>\
-                    </ul>';
-
-                $(".plugin_body").html(tpl);
-        
-                document.querySelector('.bt-input-text[name="dns_server"]').addEventListener('change', function() {
-                    var selectedValue = this.value;
-                    var options = this.options;
-                    for (var i = 0; i < options.length; i++) {
-                        if (options[i].value == selectedValue) {
-                            options[i].selected = true;
-                            break;
-                        }
-                    }
-                });
-                // 设置默认显示状态
-                var additionalSectionHw = document.querySelector('.additional-section-hw');
-                var additionalSectionAli = document.querySelector('.additional-section-ali');
-                additionalSectionHw.style.display = 'none';
-                additionalSectionAli.style.display = 'none';
-                cf2dns.toggleAdditionalSection = function(value) {
-            		var additionalSectionHw = document.querySelector('.additional-section-hw');
-            		var additionalSectionAli = document.querySelector('.additional-section-ali');
-            		if (value === '3') {
-            			additionalSectionHw.style.display = 'block';
-            			additionalSectionAli.style.display = 'none';
-            		} else if(value === '2') {
-            			additionalSectionHw.style.display = 'none';
-            			additionalSectionAli.style.display = 'block';
-            		} else {
-            			additionalSectionHw.style.display = 'none';
-            			additionalSectionAli.style.display = 'none';
-            		}
-            	};
+        //------------------------- 跨页共享数据 -------------------------
+        plugin_info_cache: null,
+        home_cache: null,
+        //获取插件信息（info.json + about.json），概览页与计划任务页共用
+        plugin_info: function (callback, fail) {
+            if (cf2dns.plugin_info_cache) {
+                callback(cf2dns.plugin_info_cache);
+                return;
+            }
+            cf2dns.send_request('get_plugin_info', 'get', {}, function (res) {
+                cf2dns.plugin_info_cache = res.data || {};
+                callback(cf2dns.plugin_info_cache);
+            }, 100000, function () {
+                if (fail) fail();
             });
         },
-        set_home_info:function(){
-            layer.confirm('是否确认保存配置？', {
-                  btn: ['确认','取消']
-                }, function(){
-                    var ipv4 = $("select[name='ipv4']").val();
-                    var ipv6 = $("select[name='ipv6']").val();
-			        var dns_server = $("select[name='dns_server']").val();
-			        var region_hw = $("select[name='region_hw']").val();
-			        var region_ali = $("select[name='region_ali']").val();
-			        var affect_num = $("input[name='affect_num']").val();
-			        var ttl = $("input[name='ttl']").val();
-			        var secretid = $("input[name='secretid']").val();
-			        var secretkey = $("input[name='secretkey']").val();
-                    cf2dns.loading = layer.msg('保存中',{icon:16,time:100000});
-                    cf2dns.send_request('set_home_info','post',{'ipv4':ipv4,'ipv6':ipv6,'dns_server':dns_server,'region_hw':region_hw,'region_ali':region_ali,'affect_num':affect_num,'ttl':ttl,'secretid':secretid,'secretkey':secretkey,'error':true},(res)=>{
-                          if(res.code==200){
-                              layer.close(cf2dns.loading);
-                              layer.msg('保存成功!',{icon:1,time:1500});
-                              cf2dns.get_home_info()
-                          }else{
-                              layer.msg(res.msg,{icon:2,time:3000});
-                          }
-                    },3000)
-                });
-            
-        },
-        get_domian_list:function(){
-            cf2dns.send_request('get_domian_list','get',{},(res)=>{
-               var html = '<button class="btn btn-sm btn-success" onclick="cf2dns.add_domian_info();" style="margin-top: 10px;" >添加域名记录</button>\
-               <table class="table table-hover waftable" >\
-                    <thead >\
-                        <tr>\
-                           <th class="col-sm-2">域名</th>\
-                           <th class="col-sm-2">主机名</th>\
-                           <th class="col-sm-3">线路</th>\
-                           <th class="col-sm-2">操作</th>\
-                        </tr>\
-                    </thead>\
-                    <tbody id="domian_list">';
-               res.data.forEach((val)=>{
-                   html += '<tr title=\''+val.host+'.'+val.domain+'\'>\
-                    <td>'+val.domain+'</td>\
-                    <td>'+val.host+'</td>\
-                    <td>'+val.line+'</td>\
-                    <td><a class=\"btlink\" onclick=\"cf2dns.del_domian_info(\''+val.domain+'\',\''+val.host+'\');\"><span>删除</span></a></td>\
-				</tr>';
-				// <a class=\"btlink\" onclick=\"cf2dns.edit_domian_info(\''+val.domain+'\',\''+val.host+'\');\"><span>编辑</span></a>&nbsp&nbsp
-               })
-                html += '</tbody></table>';
-                $(".plugin_body").html('');
-                $(".plugin_body").append(html);
-            })
-            
-        },
-        set_domian_info: function () {
-            layer.confirm('是否添加该域名记录？', {
-                  btn: ['确认','取消']
-                }, function(){
-                    var domain = $("input[name='domain']").val();
-			        var host = $("input[name='host']").val();
-                    cf2dns.loading = layer.msg('添加中',{icon:16,time:100000});
-                    cf2dns.send_request('set_domian_info','post',{'domain':domain,'host':host,'error':true},(res)=>{
-                          if(res.code==200){
-                              layer.close(cf2dns.loading);
-                              layer.msg('添加成功!',{icon:1,time:3000});
-                              cf2dns.get_domian_list()
-                          }else{
-                              layer.msg(res.msg,{icon:2,time:3000});
-                          }
-                    },1500)
-                });
-        },
-        add_domian_info: function () {
-    			var tpl='<div class="clearfixDns">\
-    					<div class="SetAggregateOne">\
-    					    <p><span>域名</span><input class="bt-input-text" name="domain" type="text" value="" /></p>\
-    					    <p><span>主机名</span><input class="bt-input-text" name="host" type="text" value="" /></p>\
-    					    <p><span>线路</span><input disabled="disabled" class="bt-input-text" name="line" type="text" value="CM,CU,CT"/></p>\
-    					</div>\
-    					<p><button style="margin-left: 288px; margin-top: 15px;" class="btn btn-default btn-sm btn-title" onclick="cf2dns.set_domian_info();">保存</button></p>\
-                    </div>\
-                    <ul class="help-info-text c7 mtb15">\
-                        <li>域名：指的是您注册的域名，比如gacjie.cn</li>\
-                        <li>主机名：指的是您域名前缀，比如您的网站域名是monitor.gacjie.cn,则monitor为你的主机名。</li>\
-                        <li>空主机名：如果你网站使用域名gacjie.cn，则需要添加空主机名记录，空主机名请填写@</li>\
-                    </ul>';
-    			$(".plugin_body").html(tpl);
-        },
-        edit_domian_info: function (domain,host) {
-    			var tpl='<div class="clearfixDns">\
-    					<div class="SetAggregateOne">\
-    					    <p><span>域名</span><input class="bt-input-text" name="domain" type="text" value="'+domain+'" /></p>\
-    					    <p><span>主机名</span><input class="bt-input-text" name="host" type="text" value="'+host+'" /></p>\
-    					    <p><span>线路</span><input disabled="disabled" class="bt-input-text" name="line" type="text" value="CM,CU,CT" /></p>\
-    					</div>\
-    					<p><button style="margin-left: 288px; margin-top: 15px;" class="btn btn-default btn-sm btn-title" onclick="cf2dns.set_domian_info();">保存</button></p>\
-    				</div>';
-    			$(".plugin_body").html(tpl);
-        },
-        del_domian_info: function (domain,host) {
-            layer.confirm('是否删除该域名记录？', {
-                  btn: ['确认','取消']
-                }, function(){
-                    cf2dns.loading = layer.msg('删除中',{icon:16,time:100000});
-                    cf2dns.send_request('del_domian_info','post',{'domain':domain,'host':host,'error':true},(res)=>{
-                          if(res.code==200){
-                              layer.close(cf2dns.loading);
-                              layer.msg('删除成功!',{icon:1,time:3000});
-                              cf2dns.get_domian_list()
-                          }else{
-                              layer.msg(res.msg,{icon:2,time:3000});
-                          }
-                    },1500)
-                });
-        },
-        get_data_server: function() {
-            
-            cf2dns.send_request('get_data_server', 'get', {}, function(res) {
-                        console.log(res.data.data_server);
-                var tpl = '<div class="clearfixDns">\
-                                <div class="SetAggregateOne">\
-                                    <p><span>数据接口</span><select class="bt-input-text" name="data_server" type="number">\
-                                        <option value="1"' + (res.data.data_server === 1 ? ' selected' : '') + '>CloudFlare官方优选(WeTest.vip)</option>\
-                                        <option value="2"' + (res.data.data_server === 2 ? ' selected' : '') + '>CloudFlare官方优选(HostMonit.com)</option>\
-										<option value="8"' + (res.data.data_server === 8 ? ' selected' : '') + '>CloudFlare官方优选(Smognode1.top)</option>\
-                                        <option value="5"' + (res.data.data_server === 5 ? ' selected' : '') + '>CloudFront官方优选(WeTest.vip)</option>\
-                                        <option value="7"' + (res.data.data_server === 7 ? ' selected' : '') + '>EdgeOne官方优选(WeTest.vip)</option>\
-                                    </select></p>\
-                                    <p><span>KEY</span><input class="bt-input-text" name="key" type="text" value="' + res.data.key + '" /></p>\
-                                    <p><span>积分</span><input disabled="disabled" class="bt-input-text" name="integral" type="text" value="' + res.data.integral + '" /><button class="btn btn-default btn-sm btn-title" onclick="cf2dns.update_integral();">更新</button></p>\
-                                </div>\
-                                <p><button style="margin-left: 288px; margin-top: 15px;" class="btn btn-default btn-sm btn-title" onclick="cf2dns.set_data_server();">保存</button></p>\
-                            </div>\
-                            <ul class="help-info-text c7 mtb15">\
-                                <li>数据接口：指定接口获取对应数据，支持CloudFlare、CloudFront、Gcore，以及多个数据提供网站。</li>\
-                                <li>KEY：KEY字段为数据接口的授权KEY，默认o1zrmHAF为免费KEY可永久免费使用。</li>\
-                                <li>积分：保存时自动从接口获取积分余额数据。</li>\
-                            </ul>';
-                $(".plugin_body").html(tpl);
+        //获取线路定义，未访问过解析配置页时自动拉取一次
+        get_lines: function (callback, fail) {
+            if (cf2dns.home_cache) {
+                callback(cf2dns.home_cache.lines || []);
+                return;
+            }
+            cf2dns.send_request('get_home_info', 'get', {}, function (res) {
+                var data = res.data || {};
+                cf2dns.home_cache = {
+                    config: data.config || {},
+                    providers: data.dns_providers || [],
+                    lines: data.lines || []
+                };
+                callback(cf2dns.home_cache.lines);
+            }, 100000, function () {
+                if (fail) fail();
             });
         },
-        set_data_server:function(){
-            layer.confirm('是否确认保存配置？', {
-                  btn: ['确认','取消']
-                }, function(){
-			        var key = $("input[name='key']").val();
-			        var data_server = $("select[name='data_server']").val();
-                    cf2dns.loading = layer.msg('保存中',{icon:16,time:100000});
-                    cf2dns.send_request('set_data_server','post',{'key':key,'data_server':data_server,'error':true},(res)=>{
-                          if(res.code==200){
-                              layer.close(cf2dns.loading);
-                              layer.msg('保存成功!',{icon:1,time:3000});
-                              cf2dns.get_data_server()
-                          }else{
-                              layer.msg(res.msg,{icon:2,time:3000});
-                          }
-                    },3000)
-                });
-            
+        //默认线路文本，取自 lines.json 中 default 为 true 的项
+        default_line_text: function (lines) {
+            var codes = (lines || []).filter(function (item) {
+                return item['default'];
+            }).map(function (item) {
+                return item.code;
+            });
+            if (!codes.length) codes = ['CM', 'CU', 'CT'];
+            return codes.join(',');
         },
-        update_integral:function(){
-            layer.confirm('是否确认更新积分？', {
-                  btn: ['确认','取消']
-                }, function(){
-			        var key = $("input[name='key']").val();
-			        var data_server = $("select[name='data_server']").val();
-                    cf2dns.loading = layer.msg('更新积分中',{icon:16,time:100000});
-                    cf2dns.send_request('update_integral','post',{'key':key,'data_server':data_server,'error':true},(res)=>{
-                          if(res.code==200){
-                              layer.close(cf2dns.loading);
-                              layer.msg('更新积分成功!',{icon:1,time:3000});
-                              cf2dns.get_data_server()
-                          }else{
-                              layer.msg(res.msg,{icon:2,time:3000});
-                          }
-                    },3000)
-                });
-            
-        },
-        get_scheduled_task: function () {
-            var tpl='<ul class="help-info-text c7 mtb15">\
-    					<li>插件不会自动配置计划任务</li>\
-    					<li>请配置好插件设置以及需要更新的域名后自行手动添加到宝塔计划任务中</li>\
-    					<li>脚本命令：btpython /www/server/panel/plugin/cf2dns/cf2dns.py</li>\
-    					<li>请设置15分钟以上的执行频率</li>\
-    					<li>配置好计划任务后，请执行一次查看日志是否运行正常。</li>\
-    				</ul>';
-            $(".plugin_body").html(tpl);
-        },
-        send_request:function(api,type,data,success,timeout=100000,error){
+
+        //----------------------------- 路由 -----------------------------
+        //取子页面 HTML。走面板的插件静态目录 /<插件名>/static/<路径>
+        load_page: function (id, ok, fail) {
+            if (cf2dns.page_cache[id]) {
+                ok(cf2dns.page_cache[id]);
+                return;
+            }
             $.ajax({
-                url:'/cf2dns/' + api + ".json?t=" +  Date.now(),
-                type:type,
-                data:data,
-                timeout:timeout,
-                success:(res)=>{success(res)},
-                error:(err)=>{
-                    if(!data.error){
-                        if(error) error(err);
-                        else layer.msg('请求接口[' + api + ']出错',{icon:5,timeout:1500});
+                url: '/cf2dns/static/pages/' + id + '.html?t=' + Date.now(),
+                type: 'get',
+                dataType: 'html',
+                timeout: 100000,
+                success: function (html) {
+                    cf2dns.page_cache[id] = html;
+                    ok(html);
+                },
+                error: function () { fail(); }
+            });
+        },
+        //切换子页面。注入 HTML 后 jQuery 会同步执行片段内的 <script>，
+        //子页面在那一刻完成注册，随后调它的 init()
+        show_page: function (id) {
+            cf2dns.current_page = id;
+            $(".bt-w-menu p").removeClass('bgw').filter("[data-page='" + id + "']").addClass('bgw');
+            $(".plugin_body").html('<div class="c7 mtb15">加载中...</div>');
+            cf2dns.load_page(id, function (html) {
+                //用户在加载期间切走了就不要再渲染，否则会覆盖新页面
+                if (!cf2dns.is_current(id)) return;
+                $(".plugin_body").html(html);
+                var page = cf2dns.pages[id];
+                if (page && page.init) {
+                    //init 抛异常时页面会停在骨架上且无任何提示，这里兜住并显示出来
+                    try {
+                        page.init();
+                    } catch (e) {
+                        $(".plugin_body").html('<div class="c7 mtb15">页面 ' + cf2dns.esc(id) + ' 初始化失败：' + cf2dns.esc(e && e.message) + '</div>');
                     }
+                } else {
+                    $(".plugin_body").html('<div class="c7 mtb15">页面 ' + cf2dns.esc(id) + ' 未注册 cf2dns.pages.' + cf2dns.esc(id) + '</div>');
                 }
+            }, function () {
+                if (!cf2dns.is_current(id)) return;
+                $(".plugin_body").html('<div class="c7 mtb15">页面加载失败：static/pages/' + cf2dns.esc(id) + '.html</div>');
+            });
+        },
 
-            })
+        //----------------------------- 请求 -----------------------------
+        //data.error 是客户端标志：true 表示由调用方自行提示错误，不弹通用提示。
+        //它只作用于前端，发送前会被剔除，不会当成表单字段发给后端。
+        //401 在这里统一拦截，所有接口（含写接口）都能拿到一致的未登录提示
+        send_request: function (api, type, data, success, timeout, error) {
+            var payload = $.extend({}, data || {});
+            var silent = payload.error === true;
+            delete payload.error;
+            $.ajax({
+                url: '/cf2dns/' + api + ".json?t=" + Date.now(),
+                type: type,
+                data: payload,
+                timeout: timeout || 100000,
+                success: function (res) {
+                    if (res && res.code === 401) { cf2dns.render_denied(res); return; }
+                    success(res);
+                },
+                error: function (err) {
+                    if (error) { error(err); return; }
+                    if (!silent) layer.msg('请求接口[' + cf2dns.esc(api) + ']出错', { icon: 5, time: 1500 });
+                }
+            });
         }
-    }
-    cf2dns.deatil()
+    };
+
+    cf2dns.show_page('overview');
 </script>

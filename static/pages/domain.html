@@ -1,0 +1,140 @@
+<!--列表视图-->
+<div id="domain_list_view">
+    <button class="btn btn-default btn-sm btn-title" onclick="cf2dns.pages.domain.show_form();">添加域名</button>
+    <table class="table table-hover waftable mtb15">
+        <thead>
+            <tr>
+                <th>域名</th>
+                <th>主机名</th>
+                <th>线路</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody id="domain_list_body"></tbody>
+    </table>
+</div>
+
+<!--表单视图，与列表视图互斥显示-->
+<div id="domain_form_view" style="display:none;">
+    <div class="clearfixDns">
+        <div class="SetAggregateOne">
+            <p><span>域名</span><input class="bt-input-text" name="domain" type="text" value="" placeholder="例：example.com" /></p>
+            <p><span>主机名</span><input class="bt-input-text" name="host" type="text" value="" placeholder="空主机名请填 @" /></p>
+            <!--线路当前固定为 lines.json 中的默认线路，不开放编辑-->
+            <p><span>线路</span><input class="bt-input-text" name="line" type="text" value="" disabled /></p>
+        </div>
+        <p style="margin-left: 288px; margin-top: 15px;">
+            <button class="btn btn-default btn-sm btn-title" onclick="cf2dns.pages.domain.save();">保存</button>
+            <button class="btn btn-default btn-sm btn-title" onclick="cf2dns.pages.domain.show_list();">返回</button>
+        </p>
+    </div>
+    <ul class="help-info-text c7 mtb15">
+        <li>主机名：空主机名请填写 @，泛解析请填写 *。</li>
+        <li>线路：当前版本固定解析移动/联通/电信三条线路，如需境外(AB)或默认(DEF)线路请直接编辑 config/domains.json。</li>
+    </ul>
+</div>
+
+<script>
+cf2dns.pages.domain = {
+    init: function () {
+        cf2dns.pages.domain.show_list();
+    },
+
+    //列表视图：拉取域名列表并生成表格行
+    show_list: function () {
+        $('#domain_form_view').hide();
+        $('#domain_list_view').show();
+        $('#domain_list_body').html('<tr><td colspan="4" class="c7">加载中...</td></tr>');
+        cf2dns.send_request('get_domian_list', 'get', {}, function (res) {
+            if (!cf2dns.is_current('domain')) return;
+            var list = res.data || [];
+            if (!list.length) {
+                $('#domain_list_body').html('<tr><td colspan="4" class="c7">暂无域名，请点击上方「添加域名」。</td></tr>');
+                return;
+            }
+            var rows = '';
+            list.forEach(function (item) {
+                var line = Array.isArray(item.line) ? item.line.join(',') : item.line;
+                //域名与主机名经 enattr 编码后拼进 onclick，回调里用 decodeURIComponent 还原
+                rows += '<tr>\
+                        <td>' + cf2dns.esc(item.domain) + '</td>\
+                        <td>' + cf2dns.esc(item.host) + '</td>\
+                        <td>' + cf2dns.esc(line) + '</td>\
+                        <td><a class="btlink" href="javascript:;" onclick="cf2dns.pages.domain.del(\'' + cf2dns.enattr(item.domain) + '\',\'' + cf2dns.enattr(item.host) + '\')">删除</a></td>\
+                    </tr>';
+            });
+            $('#domain_list_body').html(rows);
+        }, 100000, function () {
+            if (!cf2dns.is_current('domain')) return;
+            $('#domain_list_body').html('<tr><td colspan="4" class="c7">域名列表读取失败，请稍后重试。</td></tr>');
+        });
+    },
+
+    //表单视图。线路框只读，值取自 lines.json 的默认线路
+    show_form: function () {
+        $('#domain_list_view').hide();
+        $('#domain_form_view').show();
+        $("input[name='domain']").val('');
+        $("input[name='host']").val('');
+        $("input[name='line']").val('');
+        cf2dns.get_lines(function (lines) {
+            $("input[name='line']").val(cf2dns.default_line_text(lines));
+        }, function () {
+            //取不到线路定义时回退三网，不阻断添加
+            $("input[name='line']").val('CM,CU,CT');
+        });
+    },
+
+    save: function () {
+        var domain = ($("input[name='domain']").val() || '').trim();
+        var host = ($("input[name='host']").val() || '').trim();
+        if (!domain) { layer.msg('域名不能为空', { icon: 2, time: 3000 }); return; }
+        if (!host) { layer.msg('主机名不能为空，空主机名请填 @', { icon: 2, time: 3000 }); return; }
+        cf2dns.loading = layer.msg('保存中', { icon: 16, time: 100000 });
+        cf2dns.send_request('set_domian_info', 'post', {
+            'domain': domain,
+            'host': host,
+            'line': $("input[name='line']").val(),
+            'error': true
+        }, function (res) {
+            layer.close(cf2dns.loading);
+            if (res.code == 200) {
+                layer.msg('保存成功!', { icon: 1, time: 1500 });
+                cf2dns.pages.domain.show_list();
+            } else {
+                layer.msg(res.msg, { icon: 2, time: 3000 });
+            }
+        }, 100000, function () {
+            layer.close(cf2dns.loading);
+            layer.msg('保存失败，请稍后重试', { icon: 2, time: 3000 });
+        });
+    },
+
+    del: function (domain, host) {
+        var domain_text = decodeURIComponent(domain);
+        var host_text = decodeURIComponent(host);
+        layer.confirm('是否确认删除 ' + cf2dns.esc(host_text) + '.' + cf2dns.esc(domain_text) + ' ？', {
+            btn: ['确认', '取消']
+        }, function (index) {
+            layer.close(index);
+            cf2dns.loading = layer.msg('删除中', { icon: 16, time: 100000 });
+            cf2dns.send_request('del_domian_info', 'post', {
+                'domain': domain_text,
+                'host': host_text,
+                'error': true
+            }, function (res) {
+                layer.close(cf2dns.loading);
+                if (res.code == 200) {
+                    layer.msg('删除成功!', { icon: 1, time: 1500 });
+                    cf2dns.pages.domain.show_list();
+                } else {
+                    layer.msg(res.msg, { icon: 2, time: 3000 });
+                }
+            }, 100000, function () {
+                layer.close(cf2dns.loading);
+                layer.msg('删除失败，请稍后重试', { icon: 2, time: 3000 });
+            });
+        });
+    }
+};
+</script>

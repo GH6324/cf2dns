@@ -1,0 +1,7 @@
+[
+    {"code": "CM",  "name": "移动", "default": true},
+    {"code": "CU",  "name": "联通", "default": true},
+    {"code": "CT",  "name": "电信", "default": true},
+    {"code": "AB",  "name": "境外", "default": false},
+    {"code": "DEF", "name": "默认", "default": false}
+]

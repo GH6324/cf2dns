@@ -23,5 +23,6 @@ jobs:
         env:
           CONFIG: ${{ secrets.CONFIG }}
           DOMAINS: ${{ secrets.DOMAINS }}
+          #PROVIDER 只在用自定义优选源时才需要配；没设时自动读仓库里的 config/data_provider.json
           PROVIDER: ${{ secrets.PROVIDER }}
-        run: python cf2dns_actions.py
+        run: python cf2dns.py --env

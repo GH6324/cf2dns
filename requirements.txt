@@ -1,7 +1,8 @@
-aliyun-python-sdk-alidns==3.0.7
-aliyun-python-sdk-core==2.15.1
-aliyun-python-sdk-kms==2.16.3
-huaweicloudsdkcore==3.1.5
-huaweicloudsdkdns==3.1.5
-tencentcloud-sdk-python==3.0.1183
-requests==2.31.0
+# cf2dns 已去 SDK 化：四个解析商适配器改用标准库自行签名（见 module/dnsapi/），
+# 不再依赖 tencentcloud-sdk-python / aliyun-python-sdk-* / huaweicloudsdk*。
+#
+# 这么做的原因：宝塔、aaPanel 的插件共用面板的 site-packages，SDK 版本会被其他插件的
+# 安装或升级带崩；两个面板的底层 Python 版本也不一致，SDK 兼容性无法保证。
+#
+# 现在本插件对第三方包零依赖，本文件保留为空只是为了 install.sh 与 Actions 里的
+# pip install -r 不必改动，将来真需要加依赖时也有落点。

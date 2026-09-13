@@ -1,0 +1,100 @@
+<div class="clearfixDns">
+    <div class="SetAggregateOne">
+        <p><span>数据接口</span>
+            <select class="bt-input-text" name="data_server" type="number"></select></p>
+        <p><span>KEY</span><input class="bt-input-text" name="key" type="text" value="" /></p>
+        <p><span>剩余积分</span>
+            <input class="bt-input-text" name="integral" type="text" value="" disabled />
+            <button class="btn btn-default btn-sm btn-title" style="margin-left: 10px;"
+                    onclick="cf2dns.pages.dataserver.update_integral();">更新积分</button></p>
+    </div>
+    <p><button style="margin-left: 288px; margin-top: 15px;" class="btn btn-default btn-sm btn-title"
+               onclick="cf2dns.pages.dataserver.save();">保存</button></p>
+</div>
+<ul class="help-info-text c7 mtb15">
+    <li>数据接口：优选IP数据的来源，更换接口后需要使用对应接口的KEY。</li>
+    <li>KEY：优选接口的授权码，默认 o1zrmHAF 为免费码，积分有限且为公用，建议自行申请。</li>
+    <li>剩余积分：点击「更新积分」向接口查询，查询结果会写入配置。同时开启 IPV4 与 IPV6 会消耗双倍积分。</li>
+</ul>
+
+<script>
+cf2dns.pages.dataserver = {
+    init: function () {
+        cf2dns.send_request('get_data_server', 'get', {}, function (res) {
+            if (!cf2dns.is_current('dataserver')) return;
+            var data = res.data || {};
+            var config = data.config || {};
+            var providers = data.providers || [];
+
+            //接口下拉由 config/data_provider.json 生成，带 disabled 的源后端已过滤
+            var options = '';
+            providers.forEach(function (item) {
+                options += '<option value="' + cf2dns.esc(item.id) + '"' + (String(config.data_server) === String(item.id) ? ' selected' : '') + '>' + cf2dns.esc(item.name) + '</option>';
+            });
+            //已保存的接口不在清单中（被屏蔽或来自自定义源）时补一条，
+            //否则浏览器会自动选中第一项，下次保存就把用户的选择悄悄改掉
+            var matched = providers.some(function (item) {
+                return String(item.id) === String(config.data_server);
+            });
+            if (config.data_server !== undefined && config.data_server !== '' && !matched) {
+                options = '<option value="' + cf2dns.esc(config.data_server) + '" selected>当前接口 id=' + cf2dns.esc(config.data_server) + '（已停用或不在清单中）</option>' + options;
+            }
+            $("select[name='data_server']").html(options);
+
+            $("input[name='key']").val(config.key);
+            $("input[name='integral']").val(config.integral);
+        }, 100000, function () {
+            if (!cf2dns.is_current('dataserver')) return;
+            $(".plugin_body").html('<div class="c7 mtb15">数据服务配置读取失败，请稍后重试。</div>');
+        });
+    },
+
+    save: function () {
+        layer.confirm('是否确认保存配置？', {
+            btn: ['确认', '取消']
+        }, function (index) {
+            layer.close(index);
+            cf2dns.loading = layer.msg('保存中', { icon: 16, time: 100000 });
+            cf2dns.send_request('set_data_server', 'post', {
+                'data_server': $("select[name='data_server']").val(),
+                'key': $("input[name='key']").val(),
+                'error': true
+            }, function (res) {
+                layer.close(cf2dns.loading);
+                if (res.code == 200) {
+                    layer.msg('保存成功!', { icon: 1, time: 1500 });
+                    cf2dns.show_page('dataserver');
+                } else {
+                    layer.msg(res.msg, { icon: 2, time: 3000 });
+                }
+            }, 100000, function () {
+                layer.close(cf2dns.loading);
+                layer.msg('保存失败，请稍后重试', { icon: 2, time: 3000 });
+            });
+        });
+    },
+
+    //向优选接口查询剩余积分。接口报错时后端返回非 200，这里如实提示，不能显示成更新成功。
+    //把页面上当前填的 KEY 与接口一起提交 —— 用户通常是粘贴新 KEY 后立刻点这里验证它
+    update_integral: function () {
+        cf2dns.loading = layer.msg('查询中', { icon: 16, time: 100000 });
+        cf2dns.send_request('update_integral', 'post', {
+            'key': $("input[name='key']").val(),
+            'data_server': $("select[name='data_server']").val(),
+            'error': true
+        }, function (res) {
+            layer.close(cf2dns.loading);
+            if (res.code == 200) {
+                layer.msg('积分更新成功!', { icon: 1, time: 1500 });
+                //只更新积分数字，不重载整页，否则用户还没保存的 KEY 会被抹掉
+                $("input[name='integral']").val((res.data || {}).integral);
+            } else {
+                layer.msg(res.msg, { icon: 2, time: 3000 });
+            }
+        }, 100000, function () {
+            layer.close(cf2dns.loading);
+            layer.msg('积分更新失败，请检查KEY与网络', { icon: 2, time: 3000 });
+        });
+    }
+};
+</script>
