@@ -1,5 +1,5 @@
 #### 简单介绍     
-本项目基于github.com/ddgth/cf2dns二次开发增加了更多功能与平台支持。    
+本项目已经全面重构，不在基于任何项目。    
 功能上主要用于自动化将优选IP地址解析到您的域名记录中。    
 支持CloudFlare、CloudFront、EdgeOne优选IPv4&IPv6地址    
 支持宝塔面板、Docker、python3、GitHub-Actions四种方式部署。    
@@ -24,13 +24,6 @@ EdgeOne官方优选   (WeTest.vip)   更新频率15IP/15分钟
 [阿里云解析](https://help.aliyun.com/document_detail/53045.html?spm=a2c4g.11186623.2.11.2c6a2fbdh13O53)   
 [腾讯云解析(DNSPOD)](https://console.cloud.tencent.com/cam/capi)   
 [青云解析(QingCloud)](https://console.qingcloud.com/access_keys/)   
-         
-#### 宝塔兼容性   
-已测试支持以下版本    
-aapanel7.0.7   
-btpanel7.7.0    
-btpanel9.0.0-lts    
-btpanel10.0.1-lts  
          
 #### 小广告
    
